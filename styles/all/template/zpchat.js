@@ -36,6 +36,7 @@
         recipientId: 0,
         recipientName: '',
         isGlobalChat: true,
+        currentUserId: 0,
 
         init() {
             const container = document.getElementById('zpchat-container');
@@ -51,6 +52,7 @@
             this.status = document.getElementById('zpchat-status');
 
             this.refreshInterval = parseInt(container.dataset.refresh, 10) || 2000;
+            this.currentUserId  = parseInt(container.dataset.userId || '0', 10) || 0;
             this.username      = container.dataset.username || '';
             this.userColor     = container.dataset.userColor || '000000';
             this.urlSend       = container.dataset.urlSend || '';
@@ -69,6 +71,7 @@
             this.applyStyles();
             this.createToggle();
             this.createUnmuteBtn();
+            this.insertChatLinks();
             this.bindDirectChatLinks();
             this.bindEvents();
 
@@ -439,6 +442,45 @@
             this.messages?.scrollTo({
                 top: this.messages.scrollHeight,
                 behavior: 'smooth'
+            });
+        },
+
+        insertChatLinks() {
+            // Cerca tutti i post e inserisce link chat dopo gli avatar
+            const posts = document.querySelectorAll('.post');
+            posts.forEach(post => {
+                // Cerca il link al profilo dell'utente per ottenere l'ID
+                const profileLink = post.querySelector('.postprofile a[href*="memberlist"]');
+                if (!profileLink) return;
+
+                // Estrae l'user_id dal link del profilo
+                const userIdMatch = profileLink.href.match(/mode=viewprofile&u=(\d+)/);
+                if (!userIdMatch) return;
+
+                const userId = parseInt(userIdMatch[1], 10);
+                if (userId === 0 || userId === this.currentUserId) return;
+
+                // Cerca l'username
+                const username = post.querySelector('.postprofile .username')?.textContent || post.querySelector('.postprofile strong')?.textContent;
+                if (!username) return;
+
+                // Cerca l'avatar
+                const avatar = post.querySelector('.postprofile .avatar img, .postprofile .avatar');
+                if (!avatar) return;
+
+                // Verifica se il link è già stato inserito
+                if (avatar.parentElement.querySelector('.zpchat-direct-link')) return;
+
+                // Crea e inserisce il link chat
+                const chatLink = document.createElement('a');
+                chatLink.href = '#';
+                chatLink.className = 'zpchat-direct-link';
+                chatLink.dataset.recipient = userId;
+                chatLink.dataset.recipientName = username;
+                chatLink.title = 'Chat privata con ' + username;
+                chatLink.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#00aaee"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>';
+                chatLink.style.marginLeft = '5px';
+                avatar.parentElement.appendChild(chatLink);
             });
         },
 

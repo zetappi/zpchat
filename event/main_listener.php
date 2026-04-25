@@ -39,32 +39,7 @@ class main_listener implements EventSubscriberInterface
         return [
             'core.user_setup'              => 'on_user_setup',
             'core.page_footer'             => 'on_page_footer',
-            'core.viewtopic_post_row_after' => 'on_viewtopic_post_row_after',
         ];
-    }
-
-    public function on_viewtopic_post_row_after($event)
-    {
-        if (empty($this->config['zpchat_enabled']) || empty($this->config['zpchat_allow_private'])) {
-            return;
-        }
-
-        if ($this->user->data['user_id'] == ANONYMOUS) {
-            return;
-        }
-
-        $user_id = $event['user_poster_id'];
-        $username = $event['post_row']['POST_AUTHOR'];
-
-        if ($user_id == 0 || $user_id == $this->user->data['user_id']) {
-            return;
-        }
-
-        // Aggiunge data attributes al post per inserimento link chat via JavaScript
-        $event['post_row'] = array_merge($event['post_row'], [
-            'ZPCHAT_USER_ID' => $user_id,
-            'ZPCHAT_USERNAME' => $username,
-        ]);
     }
 
     public function on_user_setup($event)
@@ -92,6 +67,7 @@ class main_listener implements EventSubscriberInterface
         $this->template->assign_vars([
             'S_ZPCHAT_ENABLED'        => true,
             'S_ZPCHAT_USER_LOGGED'    => true,
+            'ZPCHAT_USER_ID'          => (int) $this->user->data['user_id'],
             'ZPCHAT_USERNAME'         => $this->user->data['username'],
             'ZPCHAT_USER_COLOR'       => $this->user->data['user_colour'] ?: '00aaee',
             'ZPCHAT_REFRESH_INTERVAL' => (int) ($this->config['zpchat_refresh_interval'] ?? 2000),
