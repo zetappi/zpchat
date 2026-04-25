@@ -37,6 +37,8 @@
         recipientName: '',
         isGlobalChat: true,
         currentUserId: 0,
+        useSSE: true,
+        eventSource: null,
 
         init() {
             const container = document.getElementById('zpchat-container');
@@ -57,6 +59,8 @@
             this.userColor     = container.dataset.userColor || '000000';
             this.urlSend       = container.dataset.urlSend || '';
             this.urlMessages   = container.dataset.urlMessages || '';
+            this.urlSSE        = container.dataset.urlSse || '';
+            this.useSSE        = container.dataset.useSse === '1';
             this.bgColor       = container.dataset.bgColor || 'f5f5f5';
             this.bgOwn         = container.dataset.bgOwn || 'e3f2fd';
             this.bgOther       = container.dataset.bgOther || 'ffffff';
@@ -172,6 +176,56 @@
         },
 
         startPolling() {
+            this.stopPolling();
+
+            if (this.useSSE && this.urlSSE) {
+                this.startSSE();
+            } else {
+                this.startFallbackPolling();
+            }
+        },
+
+        startSSE() {
+            let url = `${this.urlSSE}?last_id=${this.lastId}`;
+            if (!this.isGlobalChat) {
+                url += `&recipient_id=${this.recipientId}`;
+            }
+
+            try {
+                this.eventSource = new EventSource(url);
+                this.setConnected(true);
+
+                this.eventSource.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.messages) {
+                            this.lastId = data.last_id;
+                            this.expirySeconds = data.expiry;
+                            this.processMessages(data.messages);
+                        }
+                    } catch (err) {
+                        console.error('ZPChat: SSE parse error', err);
+                    }
+                };
+
+                this.eventSource.onerror = (e) => {
+                    console.error('ZPChat: SSE error', e);
+                    this.setConnected(false);
+                    this.eventSource.close();
+                    this.eventSource = null;
+
+                    // Fallback to polling after SSE error
+                    this.useSSE = false;
+                    this.startFallbackPolling();
+                };
+            } catch (e) {
+                console.error('ZPChat: SSE not supported, falling back to polling', e);
+                this.useSSE = false;
+                this.startFallbackPolling();
+            }
+        },
+
+        startFallbackPolling() {
             if (this.pollTimer) return;
             const poll = async () => {
                 let delay = this.pollBaseInterval;
@@ -205,6 +259,17 @@
                 this.pollTimer = setTimeout(poll, delay);
             };
             poll();
+        },
+
+        stopPolling() {
+            if (this.pollTimer) {
+                clearTimeout(this.pollTimer);
+                this.pollTimer = null;
+            }
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
         },
 
         setConnected(connected) {
@@ -418,11 +483,7 @@
             this.container?.classList.add('zpchat-minimized');
             this.toggle?.classList.add('zpchat-hidden');
             this.clearNotification();
-            if (this.pollTimer) {
-                clearTimeout(this.pollTimer);
-                this.pollTimer = null;
-            }
-            this.unmuteBtn.style.display = 'flex';
+            this.stopPolling();
         },
 
         clearNotification() {
@@ -507,10 +568,7 @@
 
             this.updateChatHeader();
 
-            if (this.pollTimer) {
-                clearTimeout(this.pollTimer);
-                this.pollTimer = null;
-            }
+            this.stopPolling();
             this.startPolling();
 
             if (!this.isOpen) {
@@ -522,17 +580,14 @@
             this.isGlobalChat = true;
             this.recipientId = 0;
             this.recipientName = '';
-            
+
             this.messageCache.clear();
             this.lastId = 0;
             this.messages.innerHTML = '';
-            
+
             this.updateChatHeader();
-            
-            if (this.pollTimer) {
-                clearTimeout(this.pollTimer);
-                this.pollTimer = null;
-            }
+
+            this.stopPolling();
             this.startPolling();
         },
 
