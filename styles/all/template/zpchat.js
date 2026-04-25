@@ -543,7 +543,9 @@
         updateChatHeader() {
             const title = this.container?.querySelector('.zpchat-title');
             const globalSwitch = document.getElementById('zpchat-global-switch');
-            
+
+            console.log('ZPChat updateChatHeader: isGlobalChat=' + this.isGlobalChat + ', recipientName=' + this.recipientName);
+
             if (title) {
                 if (this.isGlobalChat) {
                     title.textContent = 'Chat Globale';
@@ -551,7 +553,7 @@
                     title.textContent = `Chat con ${this.recipientName}`;
                 }
             }
-            
+
             if (globalSwitch) {
                 globalSwitch.style.display = this.isGlobalChat ? 'none' : 'flex';
             }
