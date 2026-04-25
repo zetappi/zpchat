@@ -227,6 +227,9 @@
                 formData.append('message', message);
                 if (!this.isGlobalChat) {
                     formData.append('recipient_id', this.recipientId);
+                    console.log('ZPChat: Sending private message to recipient_id=' + this.recipientId);
+                } else {
+                    console.log('ZPChat: Sending global message');
                 }
 
                 const response = await fetch(url, {
@@ -236,7 +239,7 @@
                 });
 
                 const data = await response.json();
-                
+
                 if (!data.success) {
                     console.error('ZPChat: Send failed', data.error);
                 }
@@ -497,22 +500,23 @@
         },
 
         startPrivateChat(recipientId, recipientName) {
+            console.log('ZPChat: startPrivateChat called with recipientId=' + recipientId + ', recipientName=' + recipientName);
             this.recipientId = recipientId;
             this.recipientName = recipientName;
             this.isGlobalChat = false;
-            
+
             this.messageCache.clear();
             this.lastId = 0;
             this.messages.innerHTML = '';
-            
+
             this.updateChatHeader();
-            
+
             if (this.pollTimer) {
                 clearTimeout(this.pollTimer);
                 this.pollTimer = null;
             }
             this.startPolling();
-            
+
             if (!this.isOpen) {
                 this.toggleChat();
             }
