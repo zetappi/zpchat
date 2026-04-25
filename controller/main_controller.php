@@ -175,7 +175,7 @@ class main_controller
     public function send()
     {
         if (empty($this->config['zpchat_enabled'])) {
-            return new JsonResponse(['success' => false, 'error' => 'Forbidden'], 403);
+            return new JsonResponse(['success' => false, 'error' => 'Chat disabled'], 403);
         }
 
         if ($this->user->data['user_id'] == ANONYMOUS) {
@@ -186,8 +186,10 @@ class main_controller
         $message = trim(strip_tags($message));
         $recipient_id = $this->request->variable('recipient_id', 0);
 
-        if (empty($message) || strlen($message) > 500) {
-            return new JsonResponse(['success' => false, 'error' => 'Invalid message'], 400);
+        error_log('ZPChat Send: user_id=' . $this->user->data['user_id'] . ', recipient_id=' . $recipient_id . ', message=' . $message);
+
+        if (empty($message)) {
+            return new JsonResponse(['success' => false, 'error' => 'Empty message'], 400);
         }
 
         // Verifica se chat privata è abilitata
@@ -210,16 +212,16 @@ class main_controller
             'recipient_id' => (int) $recipient_id,
         ];
 
-        $sql = 'INSERT INTO ' . $this->table_prefix . 'zpchat_messages ' . $this->db->sql_build_array('INSERT', $sql_ary);
-        $this->db->sql_query($sql);
+        try {
+            $sql = 'INSERT INTO ' . $this->table_prefix . 'zpchat_messages ' . $this->db->sql_build_array('INSERT', $sql_ary);
+            $this->db->sql_query($sql);
 
-        $expiry = !empty($this->config['zpchat_expiry_seconds']) ? (int) $this->config['zpchat_expiry_seconds'] : 60;
-        $this->clean_old_messages($expiry);
-
-        $max_messages = !empty($this->config['zpchat_max_messages']) ? (int) $this->config['zpchat_max_messages'] : 100;
-        $this->trim_messages($max_messages);
-
-        return new JsonResponse(['success' => true]);
+            error_log('ZPChat Send: message inserted with recipient_id=' . $recipient_id);
+            return new JsonResponse(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('ZPChat Send Error: ' . $e->getMessage());
+            return new JsonResponse(['success' => false, 'error' => 'Database error'], 500);
+        }
     }
 
     protected function clean_old_messages($expiry)
