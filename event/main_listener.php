@@ -102,8 +102,12 @@ class main_listener implements EventSubscriberInterface
         }
 
         $post_row = $event['post_row'];
-        $user_id = $event['user_poster_data']['user_id'];
-        $username = $event['user_poster_data']['username'];
+        $user_id = isset($event['user_poster_data']['user_id']) ? (int) $event['user_poster_data']['user_id'] : 0;
+        $username = isset($event['user_poster_data']['username']) ? $event['user_poster_data']['username'] : '';
+
+        if ($user_id == 0) {
+            return;
+        }
 
         // Non mostrare link per se stessi
         if ($user_id == $this->user->data['user_id']) {
