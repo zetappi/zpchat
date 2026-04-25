@@ -33,6 +33,9 @@
         unreadIds: new Set(),
         isMuted: false,
         unmuteBtn: null,
+        recipientId: 0,
+        recipientName: '',
+        isGlobalChat: true,
 
         init() {
             const container = document.getElementById('zpchat-container');
@@ -66,6 +69,7 @@
             this.applyStyles();
             this.createToggle();
             this.createUnmuteBtn();
+            this.bindDirectChatLinks();
             this.bindEvents();
 
             if (this.isMuted) {
@@ -145,6 +149,11 @@
                 e.stopPropagation();
                 this.muteChat();
             });
+
+            document.getElementById('zpchat-global-switch')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.switchToGlobalChat();
+            });
         },
 
         toggleChat() {
@@ -164,7 +173,10 @@
             const poll = async () => {
                 let delay = this.pollBaseInterval;
                 try {
-                    const url = `${this.urlMessages}?last_id=${this.lastId}`;
+                    let url = `${this.urlMessages}?last_id=${this.lastId}`;
+                    if (!this.isGlobalChat) {
+                        url += `&recipient_id=${this.recipientId}`;
+                    }
                     const response = await fetch(url, { credentials: 'same-origin' });
                     if (!response.ok) {
                         throw new Error('HTTP ' + response.status);
@@ -210,6 +222,9 @@
                 const url = this.urlSend;
                 const formData = new FormData();
                 formData.append('message', message);
+                if (!this.isGlobalChat) {
+                    formData.append('recipient_id', this.recipientId);
+                }
 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -425,6 +440,75 @@
                 top: this.messages.scrollHeight,
                 behavior: 'smooth'
             });
+        },
+
+        bindDirectChatLinks() {
+            document.addEventListener('click', (e) => {
+                const link = e.target.closest('.zpchat-direct-link');
+                if (link) {
+                    e.preventDefault();
+                    const recipientId = parseInt(link.dataset.recipient, 10);
+                    const recipientName = link.dataset.recipientName || 'Utente';
+                    this.startPrivateChat(recipientId, recipientName);
+                }
+            });
+        },
+
+        startPrivateChat(recipientId, recipientName) {
+            this.recipientId = recipientId;
+            this.recipientName = recipientName;
+            this.isGlobalChat = false;
+            
+            this.messageCache.clear();
+            this.lastId = 0;
+            this.messages.innerHTML = '';
+            
+            this.updateChatHeader();
+            
+            if (this.pollTimer) {
+                clearTimeout(this.pollTimer);
+                this.pollTimer = null;
+            }
+            this.startPolling();
+            
+            if (!this.isOpen) {
+                this.toggleChat();
+            }
+        },
+
+        switchToGlobalChat() {
+            this.isGlobalChat = true;
+            this.recipientId = 0;
+            this.recipientName = '';
+            
+            this.messageCache.clear();
+            this.lastId = 0;
+            this.messages.innerHTML = '';
+            
+            this.updateChatHeader();
+            
+            if (this.pollTimer) {
+                clearTimeout(this.pollTimer);
+                this.pollTimer = null;
+            }
+            this.startPolling();
+        },
+
+        updateChatHeader() {
+            const title = this.container?.querySelector('.zpchat-title');
+            const globalSwitch = document.getElementById('zpchat-global-switch');
+            
+            if (title) {
+                if (this.isGlobalChat) {
+                    title.textContent = 'Chat Globale';
+                } else {
+                    title.textContent = `Chat con ${this.recipientName}`;
+                }
+            }
+            
+            if (globalSwitch) {
+                globalSwitch.style.display = this.isGlobalChat ? 'none' : 'flex';
+            }
         },
     };
 

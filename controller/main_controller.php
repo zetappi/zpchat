@@ -53,6 +53,19 @@ class main_controller
         return new Response('Invalid action', 400);
     }
 
+    protected function get_conversation_filter($recipient_id)
+    {
+        if ($recipient_id == 0) {
+            // Chat globale
+            return 'recipient_id = 0';
+        } else {
+            // Chat privata: messaggi tra current_user e recipient
+            $current_user = $this->user->data['user_id'];
+            return '(user_id = ' . (int) $current_user . ' AND recipient_id = ' . (int) $recipient_id . ') OR ' .
+                   '(user_id = ' . (int) $recipient_id . ' AND recipient_id = ' . (int) $current_user . ')';
+        }
+    }
+
     public function sse()
     {
         if (empty($this->config['zpchat_enabled'])) {
@@ -64,6 +77,7 @@ class main_controller
         }
 
         $last_id = $this->request->variable('last_id', 0);
+        $recipient_id = $this->request->variable('recipient_id', 0);
         $expiry  = !empty($this->config['zpchat_expiry_seconds']) ? (int) $this->config['zpchat_expiry_seconds'] : 60;
         $db      = $this->db;
         $table   = $this->table_prefix;
@@ -71,11 +85,14 @@ class main_controller
 
         $max_messages = !empty($this->config['zpchat_max_messages']) ? (int) $this->config['zpchat_max_messages'] : 100;
 
-        $response = new StreamedResponse(function () use ($last_id, $expiry, $db, $table, $user, $max_messages) {
-            $sql = 'SELECT message_id, user_id, username, message, message_time, user_color
-                FROM ' . $table . 'zpchat_messages';
+        $conversation_filter = $this->get_conversation_filter($recipient_id);
+
+        $response = new StreamedResponse(function () use ($last_id, $expiry, $db, $table, $user, $max_messages, $conversation_filter) {
+            $sql = 'SELECT message_id, user_id, username, message, message_time, user_color, recipient_id
+                FROM ' . $table . 'zpchat_messages
+                WHERE ' . $conversation_filter;
             if ($last_id > 0) {
-                $sql .= ' WHERE message_id > ' . (int) $last_id;
+                $sql .= ' AND message_id > ' . (int) $last_id;
             }
             $sql .= ' ORDER BY message_id ASC LIMIT ' . ($max_messages + 10);
 
@@ -91,6 +108,7 @@ class main_controller
                     'message'      => $row['message'],
                     'message_time' => (int) $row['message_time'],
                     'user_color'   => $row['user_color'],
+                    'recipient_id' => (int) $row['recipient_id'],
                 ];
                 $max_id = (int) $row['message_id'];
             }
@@ -119,13 +137,17 @@ class main_controller
         }
 
         $last_id = $this->request->variable('last_id', 0);
+        $recipient_id = $this->request->variable('recipient_id', 0);
         $expiry  = !empty($this->config['zpchat_expiry_seconds']) ? (int) $this->config['zpchat_expiry_seconds'] : 60;
         $max_messages = !empty($this->config['zpchat_max_messages']) ? (int) $this->config['zpchat_max_messages'] : 100;
 
-        $sql = 'SELECT message_id, user_id, username, message, message_time, user_color
-            FROM ' . $this->table_prefix . 'zpchat_messages';
+        $conversation_filter = $this->get_conversation_filter($recipient_id);
+
+        $sql = 'SELECT message_id, user_id, username, message, message_time, user_color, recipient_id
+            FROM ' . $this->table_prefix . 'zpchat_messages
+            WHERE ' . $conversation_filter;
         if ($last_id > 0) {
-            $sql .= ' WHERE message_id > ' . (int) $last_id;
+            $sql .= ' AND message_id > ' . (int) $last_id;
         }
         $sql .= ' ORDER BY message_id ASC LIMIT ' . ($max_messages + 10);
 
@@ -141,6 +163,7 @@ class main_controller
                 'message'      => $row['message'],
                 'message_time' => (int) $row['message_time'],
                 'user_color'   => $row['user_color'],
+                'recipient_id' => (int) $row['recipient_id'],
             ];
             $max_id = (int) $row['message_id'];
         }
@@ -161,9 +184,20 @@ class main_controller
 
         $message = $this->request->variable('message', '', true);
         $message = trim(strip_tags($message));
+        $recipient_id = $this->request->variable('recipient_id', 0);
 
         if (empty($message) || strlen($message) > 500) {
             return new JsonResponse(['success' => false, 'error' => 'Invalid message'], 400);
+        }
+
+        // Verifica se chat privata è abilitata
+        if ($recipient_id > 0 && empty($this->config['zpchat_allow_private'])) {
+            return new JsonResponse(['success' => false, 'error' => 'Private chat disabled'], 403);
+        }
+
+        // Verifica se chat globale è abilitata
+        if ($recipient_id == 0 && empty($this->config['zpchat_allow_global'])) {
+            return new JsonResponse(['success' => false, 'error' => 'Global chat disabled'], 403);
         }
 
         $sql_ary = [
@@ -173,6 +207,7 @@ class main_controller
             'user_ip'      => $this->user->ip,
             'message_time' => time(),
             'user_color'   => $this->user->data['user_colour'] ?: '00aaee',
+            'recipient_id' => (int) $recipient_id,
         ];
 
         $sql = 'INSERT INTO ' . $this->table_prefix . 'zpchat_messages ' . $this->db->sql_build_array('INSERT', $sql_ary);

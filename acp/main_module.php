@@ -36,6 +36,8 @@ class main_module
             'vars'    => array(
                 'legend1'                => 'ACP_ZPCHAT_SETTINGS',
                 'zpchat_enabled'         => array('lang' => 'ZPCHAT_ENABLED', 'validate' => 'bool', 'type' => 'radio:yes_no', 'explain' => true),
+                'zpchat_allow_global'    => array('lang' => 'ZPCHAT_ALLOW_GLOBAL', 'validate' => 'bool', 'type' => 'radio:yes_no', 'explain' => true),
+                'zpchat_allow_private'   => array('lang' => 'ZPCHAT_ALLOW_PRIVATE', 'validate' => 'bool', 'type' => 'radio:yes_no', 'explain' => true),
                 'zpchat_expiry_seconds'  => array('lang' => 'ZPCHAT_EXPIRY_SECONDS', 'validate' => 'int:10:3600', 'type' => 'text:5:10', 'explain' => true),
                 'zpchat_refresh_interval' => array('lang' => 'ZPCHAT_REFRESH_INTERVAL', 'validate' => 'int:500:10000', 'type' => 'text:5:10', 'explain' => true),
                 'zpchat_max_messages'    => array('lang' => 'ZPCHAT_MAX_MESSAGES', 'validate' => 'int:10:500', 'type' => 'text:3:10', 'explain' => true),

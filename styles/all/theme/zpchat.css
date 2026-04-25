@@ -39,6 +39,47 @@
     75% { transform: rotate(3deg); }
 }
 
+/* Link chat nell'avatar */
+.zpchat-direct-link {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.zpchat-direct-link:hover {
+    background-color: rgba(0, 170, 238, 0.1);
+}
+
+.zpchat-direct-link svg {
+    vertical-align: middle;
+}
+
+/* Pulsante switch chat globale */
+.zpchat-global-switch {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.2s;
+}
+
+.zpchat-global-switch:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.zpchat-title {
+    flex-grow: 1;
+    font-weight: bold;
+}
+
 .zpchat-badge {
     position: absolute;
     top: -4px;

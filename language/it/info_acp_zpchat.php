@@ -14,6 +14,10 @@ $lang = array_merge($lang, array(
 
     'ZPCHAT_ENABLED' => 'Chat abilitata',
     'ZPCHAT_ENABLED_EXPLAIN' => 'Abilita o disabilita la chat in tempo reale.',
+    'ZPCHAT_ALLOW_GLOBAL' => 'Permetti chat globale',
+    'ZPCHAT_ALLOW_GLOBAL_EXPLAIN' => 'Se abilitato, gli utenti possono partecipare alla chat globale visibile a tutti.',
+    'ZPCHAT_ALLOW_PRIVATE' => 'Permetti chat private',
+    'ZPCHAT_ALLOW_PRIVATE_EXPLAIN' => 'Se abilitato, gli utenti possono avviare chat private cliccando sull\'icona chat nell\'avatar degli altri utenti.',
 
     'ZPCHAT_EXPIRY_SECONDS' => 'Scadenza messaggi (secondi)',
     'ZPCHAT_EXPIRY_SECONDS_EXPLAIN' => 'Tempo dopo il quale i messaggi vengono automaticamente rimossi (default: 60 secondi).',
