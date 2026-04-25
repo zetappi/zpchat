@@ -40,6 +40,7 @@ Rendere l'estensione sicura, robusta e conforme agli standard phpBB3 prima del r
 | 17 | **`sizeof()` legacy** | `acp/main_module.php` | Cambiato in `count()` (2 occorrenze) |
 | 18 | **Proprietà CSS non standard** | `styles/all/theme/zpchat.css` | Aggiunto `overflow-wrap: break-word` come fallback standard |
 | 19 | **Branch dead code** `<!-- ELSE -->` per anonimi | `styles/all/template/zpchat_body.html` | Rimosso (mai raggiunto per via di `S_ZPCHAT_USER_LOGGED`) |
+| 20 | **Log diagnostici in console** – `init() called`, `container found` | `styles/all/template/zpchat.js` | Rimossi tutti i `console.log` dal metodo `init()` |
 
 ---
 

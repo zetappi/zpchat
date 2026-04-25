@@ -35,13 +35,10 @@
         unmuteBtn: null,
 
         init() {
-            console.log('ZPChat: init() called');
             const container = document.getElementById('zpchat-container');
             if (!container) {
-                console.log('ZPChat: container NOT found');
                 return;
             }
-            console.log('ZPChat: container found, isOpen=', this.isOpen);
 
             this.container = container;
             this.toggle = document.getElementById('zpchat-toggle');
