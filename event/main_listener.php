@@ -93,11 +93,19 @@ class main_listener implements EventSubscriberInterface
 
     public function on_viewtopic_modify_post_row($event)
     {
-        if (empty($this->config['zpchat_enabled']) || empty($this->config['zpchat_allow_private'])) {
+        error_log('ZPChat: on_viewtopic_modify_post_row triggered');
+
+        if (empty($this->config['zpchat_enabled'])) {
+            error_log('ZPChat: zpchat_enabled is empty');
+            return;
+        }
+        if (empty($this->config['zpchat_allow_private'])) {
+            error_log('ZPChat: zpchat_allow_private is empty');
             return;
         }
 
         if ($this->user->data['user_id'] == ANONYMOUS) {
+            error_log('ZPChat: user is anonymous');
             return;
         }
 
@@ -105,12 +113,16 @@ class main_listener implements EventSubscriberInterface
         $user_id = isset($event['user_poster_data']['user_id']) ? (int) $event['user_poster_data']['user_id'] : 0;
         $username = isset($event['user_poster_data']['username']) ? $event['user_poster_data']['username'] : '';
 
+        error_log('ZPChat: user_id=' . $user_id . ', username=' . $username);
+
         if ($user_id == 0) {
+            error_log('ZPChat: user_id is 0, returning');
             return;
         }
 
         // Non mostrare link per se stessi
         if ($user_id == $this->user->data['user_id']) {
+            error_log('ZPChat: skipping own user');
             return;
         }
 
@@ -121,6 +133,7 @@ class main_listener implements EventSubscriberInterface
             <svg viewBox="0 0 24 24" width="16" height="16" fill="#00aaee"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
         </a>';
 
+        error_log('ZPChat: link added to avatar');
         $event['post_row'] = $post_row;
     }
 }
