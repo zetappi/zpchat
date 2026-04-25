@@ -1,0 +1,61 @@
+<!-- INCLUDE overall_header.html -->
+
+<a id="maincontent"></a>
+
+<h1>{L_TITLE}</h1>
+
+<p>{L_TITLE_EXPLAIN}</p>
+
+<form id="acp_zpchat" method="post" action="{U_ACTION}">
+
+<!-- BEGIN options -->
+    <!-- IF options.S_LEGEND -->
+        <fieldset>
+            <legend>{options.LEGEND}</legend>
+    <!-- ELSE -->
+        <dl>
+            <dt><label for="{options.KEY}">{options.TITLE}:</label><!-- IF options.S_EXPLAIN --><br /><span>{options.TITLE_EXPLAIN}</span><!-- ENDIF --></dt>
+            <dd>{options.CONTENT}</dd>
+        </dl>
+    <!-- ENDIF -->
+<!-- END options -->
+
+<fieldset class="submit-buttons">
+    <input type="submit" name="submit" value="{L_SUBMIT}" class="button1" />
+    <input type="submit" name="clear_history" value="{L_ACP_ZPCHAT_CLEAR_HISTORY}" class="button2" onclick="return confirm('{L_ACP_ZPCHAT_CLEAR_HISTORY_CONFIRM}');" />
+    <input type="submit" name="export_csv" value="{L_ACP_ZPCHAT_EXPORT_CSV}" class="button2" />
+</fieldset>
+
+{S_FORM_TOKEN}
+
+</form>
+
+<fieldset>
+    <legend>{L_ACP_ZPCHAT_MANAGE}</legend>
+    <p>{L_ACP_ZPCHAT_TOTAL_MESSAGES}: <strong>{TOTAL_MESSAGES}</strong></p>
+</fieldset>
+
+<script>
+document.querySelectorAll('input[name="config[zpchat_bg_color]"], input[name="config[zpchat_bg_own]"], input[name="config[zpchat_bg_other]"], input[name="config[zpchat_header_color]"], input[name="config[zpchat_button_color]"]').forEach(function(input) {
+	var picker = document.createElement('input');
+	picker.type = 'color';
+	picker.value = '#' + (input.value || '000000');
+	picker.style.marginLeft = '8px';
+	picker.style.verticalAlign = 'middle';
+	picker.style.cursor = 'pointer';
+	picker.style.width = '36px';
+	picker.style.height = '28px';
+	picker.style.border = '1px solid #ccc';
+	picker.style.padding = '0';
+	input.parentNode.insertBefore(picker, input.nextSibling);
+	picker.addEventListener('input', function() {
+		input.value = picker.value.replace('#', '');
+	});
+	input.addEventListener('input', function() {
+		var v = input.value.replace('#', '');
+		if (v.length === 6) { picker.value = '#' + v; }
+	});
+});
+</script>
+
+<!-- INCLUDE overall_footer.html -->

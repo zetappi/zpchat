@@ -1,0 +1,24 @@
+services:
+    marcozp.zpchat.listener.main:
+        class: marcozp\zpchat\event\main_listener
+        arguments:
+            - '@config'
+            - '@user'
+            - '@template'
+            - '@ext.manager'
+            - '@controller.helper'
+        tags:
+            - { name: event.listener }
+
+    marcozp.zpchat.controller.main:
+        class: marcozp\zpchat\controller\main_controller
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@language'
+            - '@request'
+            - '@user'
+            - '%core.table_prefix%'
+        public: true
+        tags:
+            - { name: controller, alias: zpchat }

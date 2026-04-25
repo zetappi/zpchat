@@ -1,0 +1,15 @@
+# phpBB extension - file generati
+cache/
+vendor/
+composer.lock
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

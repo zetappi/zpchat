@@ -1,0 +1,14 @@
+marcozp_zpchat_sse:
+    path: /zpchat/sse
+    defaults: { _controller: 'marcozp.zpchat.controller.main:handle', action: sse }
+    methods: [GET]
+
+marcozp_zpchat_messages:
+    path: /zpchat/messages
+    defaults: { _controller: 'marcozp.zpchat.controller.main:handle', action: messages }
+    methods: [GET]
+
+marcozp_zpchat_send:
+    path: /zpchat/send
+    defaults: { _controller: 'marcozp.zpchat.controller.main:handle', action: send }
+    methods: [POST]
