@@ -32,6 +32,7 @@ class main_listener implements EventSubscriberInterface
         $this->template    = $template;
         $this->ext_manager = $ext_manager;
         $this->helper      = $helper;
+        error_log('ZPChat: main_listener constructor called');
     }
 
     public static function getSubscribedEvents()
