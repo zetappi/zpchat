@@ -28,41 +28,31 @@ Trasformare l'estensione ZP Chat da chat globale (broadcast) a chat user-to-user
 
 **File:** `migrations/v1_1_0.php`
 
-#### Nuova tabella per conversazioni (opzionale per Fase 1, consigliata per Fase 2)
-```sql
-CREATE TABLE phpbb_zpchat_conversations (
-    conversation_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id_1 INT UNSIGNED NOT NULL,
-    user_id_2 INT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_users (user_id_1, user_id_2),
-    INDEX idx_user1 (user_id_1),
-    INDEX idx_user2 (user_id_2)
-);
-```
-
-#### Modifica tabella messaggi (Fase 1 MVP)
+#### Modifica tabella messaggi (Fase 1 MVP - Approccio Semplificato)
 ```sql
 ALTER TABLE phpbb_zpchat_messages
 ADD COLUMN recipient_id INT UNSIGNED DEFAULT 0 COMMENT '0 = chat globale, >0 = chat privata',
-ADD COLUMN conversation_id INT UNSIGNED DEFAULT 0 COMMENT 'ID conversazione (0 = globale)',
-ADD INDEX idx_recipient (recipient_id),
-ADD INDEX idx_conversation (conversation_id);
+ADD INDEX idx_recipient (recipient_id);
 ```
 
 **Logica:**
 - `recipient_id = 0` → Chat globale (broadcast a tutti)
 - `recipient_id > 0` → Chat privata tra mittente e destinatario
-- `conversation_id = 0` → Chat globale
-- `conversation_id > 0` → Chat privata con ID specifico
+
+**Filtro conversazione:**
+Per una chat privata tra utente A e utente B, i messaggi vengono filtrati con:
+```sql
+WHERE (user_id = A AND recipient_id = B) OR (user_id = B AND recipient_id = A)
+```
 
 #### Configurazioni aggiuntive
 ```php
 ['config.add', ['zpchat_allow_private', 1]],  // Abilita chat private
 ['config.add', ['zpchat_allow_global', 1]],    // Abilita chat globale
-['config.add', ['zpchat_version', '1.1.0']],
+['config.update', ['zpchat_version', '1.1.0']],
 ```
+
+**Nota:** Per Fase 1 MVP non è stata implementata la tabella `zpchat_conversations`. Questo sarà valutato per Fase 2 (group chat).
 
 ---
 
@@ -70,49 +60,21 @@ ADD INDEX idx_conversation (conversation_id);
 
 **File:** `controller/main_controller.php`
 
-#### 2.1 Nuovo endpoint: Creazione conversazione
+**Nota:** Per Fase 1 MVP non è stato implementato l'endpoint `create_conversation`. Il frontend gestisce direttamente il passaggio a chat privata usando solo `recipient_id`.
+
+#### 2.1 Nuovo metodo: Filtro conversazione
 ```php
-public function create_conversation($recipient_id)
+protected function get_conversation_filter($recipient_id)
 {
-    if (empty($this->config['zpchat_enabled']) || empty($this->config['zpchat_allow_private'])) {
-        return new JsonResponse(['success' => false, 'error' => 'Forbidden'], 403);
+    if ($recipient_id == 0) {
+        // Chat globale
+        return 'recipient_id = 0';
+    } else {
+        // Chat privata: messaggi tra current_user e recipient
+        $current_user = $this->user->data['user_id'];
+        return '(user_id = ' . (int) $current_user . ' AND recipient_id = ' . (int) $recipient_id . ') OR ' .
+               '(user_id = ' . (int) $recipient_id . ' AND recipient_id = ' . (int) $current_user . ')';
     }
-
-    if ($this->user->data['user_id'] == ANONYMOUS) {
-        return new JsonResponse(['success' => false, 'error' => 'Forbidden'], 403);
-    }
-
-    $recipient_id = (int) $recipient_id;
-    if ($recipient_id <= 0 || $recipient_id == $this->user->data['user_id']) {
-        return new JsonResponse(['success' => false, 'error' => 'Invalid recipient'], 400);
-    }
-
-    // Verifica esistenza conversazione
-    $user1 = min($this->user->data['user_id'], $recipient_id);
-    $user2 = max($this->user->data['user_id'], $recipient_id);
-
-    $sql = 'SELECT conversation_id FROM ' . $this->table_prefix . 'zpchat_conversations
-        WHERE user_id_1 = ' . $user1 . ' AND user_id_2 = ' . $user2;
-    $result = $this->db->sql_query($sql);
-    $row = $this->db->sql_fetchrow($result);
-    $this->db->sql_freeresult($result);
-
-    if ($row) {
-        return new JsonResponse(['success' => true, 'conversation_id' => (int) $row['conversation_id']]);
-    }
-
-    // Crea nuova conversazione
-    $sql_ary = [
-        'user_id_1' => $user1,
-        'user_id_2' => $user2,
-        'created_at' => time(),
-    ];
-    $sql = 'INSERT INTO ' . $this->table_prefix . 'zpchat_conversations ' . $this->db->sql_build_array('INSERT', $sql_ary);
-    $this->db->sql_query($sql);
-
-    $conversation_id = (int) $this->db->sql_nextid();
-
-    return new JsonResponse(['success' => true, 'conversation_id' => $conversation_id]);
 }
 ```
 
@@ -122,34 +84,17 @@ public function messages()
 {
     // ... controlli esistenti ...
 
-    $conversation_id = $this->request->variable('conversation_id', 0);
     $recipient_id = $this->request->variable('recipient_id', 0);
     $last_id = $this->request->variable('last_id', 0);
 
-    $where_conditions = [];
-    
-    if ($conversation_id > 0) {
-        // Chat privata specifica
-        $where_conditions[] = 'conversation_id = ' . (int) $conversation_id;
-    } elseif ($recipient_id > 0) {
-        // Chat privata senza conversation_id (fallback Fase 1)
-        $where_conditions[] = '(recipient_id = 0 OR recipient_id = ' . (int) $recipient_id . ' OR user_id = ' . (int) $recipient_id . ')';
-        $where_conditions[] = '(user_id = ' . (int) $this->user->data['user_id'] . ' OR recipient_id = ' . (int) $this->user->data['user_id'] . ')';
-    } else {
-        // Chat globale
-        $where_conditions[] = 'recipient_id = 0';
-        $where_conditions[] = 'conversation_id = 0';
-    }
+    $conversation_filter = $this->get_conversation_filter($recipient_id);
 
-    $sql = 'SELECT message_id, user_id, username, message, message_time, user_color, recipient_id, conversation_id
-        FROM ' . $this->table_prefix . 'zpchat_messages';
-    
-    if (!empty($where_conditions)) {
-        $sql .= ' WHERE ' . implode(' AND ', $where_conditions);
-    }
+    $sql = 'SELECT message_id, user_id, username, message, message_time, user_color, recipient_id
+        FROM ' . $this->table_prefix . 'zpchat_messages
+        WHERE ' . $conversation_filter;
 
     if ($last_id > 0) {
-        $sql .= (empty($where_conditions) ? ' WHERE ' : ' AND ') . 'message_id > ' . (int) $last_id;
+        $sql .= ' AND message_id > ' . (int) $last_id;
     }
 
     $sql .= ' ORDER BY message_id ASC LIMIT ' . ($max_messages + 10);
@@ -159,7 +104,7 @@ public function messages()
 ```
 
 #### 2.3 Modifica endpoint `sse()`
-Stessa logica di `messages()` con `WHERE conditions` per filtrare per conversazione.
+Stessa logica di `messages()` con `recipient_id` e filtro conversazione.
 
 #### 2.4 Modifica endpoint `send()`
 ```php
@@ -167,41 +112,32 @@ public function send()
 {
     // ... controlli esistenti ...
 
-    $conversation_id = $this->request->variable('conversation_id', 0);
+    $message = $this->request->variable('message', '', true);
+    $message = trim(strip_tags($message));
     $recipient_id = $this->request->variable('recipient_id', 0);
 
-    // Validazione: se chat privata, deve avere recipient_id o conversation_id
-    if ($recipient_id > 0 || $conversation_id > 0) {
-        if (empty($this->config['zpchat_allow_private'])) {
-            return new JsonResponse(['success' => false, 'error' => 'Private chat disabled'], 403);
-        }
+    // Verifica se chat privata è abilitata
+    if ($recipient_id > 0 && empty($this->config['zpchat_allow_private'])) {
+        return new JsonResponse(['success' => false, 'error' => 'Private chat disabled'], 403);
+    }
+
+    // Verifica se chat globale è abilitata
+    if ($recipient_id == 0 && empty($this->config['zpchat_allow_global'])) {
+        return new JsonResponse(['success' => false, 'error' => 'Global chat disabled'], 403);
     }
 
     $sql_ary = [
-        'user_id'        => $this->user->data['user_id'],
-        'username'       => $this->user->data['username'],
-        'message'        => $message,
-        'user_ip'        => $this->user->ip,
-        'message_time'   => time(),
-        'user_color'     => $this->user->data['user_colour'] ?: '00aaee',
-        'recipient_id'   => (int) $recipient_id,
-        'conversation_id' => (int) $conversation_id,
+        'user_id'      => $this->user->data['user_id'],
+        'username'     => $this->user->data['username'],
+        'message'      => $message,
+        'user_ip'      => $this->user->ip,
+        'message_time' => time(),
+        'user_color'   => $this->user->data['user_colour'] ?: '00aaee',
+        'recipient_id' => (int) $recipient_id,
     ];
 
     // ... resto del codice ...
 }
-```
-
-#### 2.5 Nuova rotta
-**File:** `config/routing.yml`
-```yaml
-marcozp_zpchat_create_conversation:
-    path: /zpchat/create/{recipient_id}
-    defaults:
-        _controller: marcozp.zpchat.controller.main:handle
-        action: create_conversation
-    requirements:
-        recipient_id: \d+
 ```
 
 ---
@@ -236,16 +172,15 @@ public function on_viewtopic_modify_post_row($event)
 
     $post_row = $event['post_row'];
     $user_id = $event['user_poster_data']['user_id'];
+    $username = $event['user_poster_data']['username'];
 
     // Non mostrare link per se stessi
     if ($user_id == $this->user->data['user_id']) {
         return;
     }
 
-    $chat_url = $this->helper->route('marcozp_zpchat_create_conversation', ['recipient_id' => $user_id]);
-
-    // Aggiungi link chat vicino all'avatar
-    $post_row['POSTER_AVATAR'] .= '<a href="#" class="zpchat-direct-link" data-recipient="' . $user_id . '" data-url="' . htmlspecialchars($chat_url) . '" title="Chat privata">
+    // Aggiungi link chat vicino all'avatar (solo data-attributes, no URL)
+    $post_row['POSTER_AVATAR'] .= '<a href="#" class="zpchat-direct-link" data-recipient="' . $user_id . '" data-recipient-name="' . htmlspecialchars($username) . '" title="Chat privata con ' . htmlspecialchars($username) . '">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="#00aaee"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
     </a>';
 
@@ -253,11 +188,7 @@ public function on_viewtopic_modify_post_row($event)
 }
 ```
 
-#### 3.3 Nuova variabile template
-Nel metodo `assign_chat_vars()` aggiungere:
-```php
-'ZPCHAT_URL_CREATE_CONVERSATION' => $this->helper->route('marcozp_zpchat_create_conversation', ['recipient_id' => 0]),
-```
+**Nota:** Il link usa data-attributes invece di chiamare un endpoint. Il frontend gestisce direttamente l'avvio della chat privata.
 
 ---
 
@@ -269,7 +200,6 @@ Nel metodo `assign_chat_vars()` aggiungere:
 ```javascript
 const ZPCHAT = {
     // ... proprietà esistenti ...
-    conversationId: 0,        // 0 = globale, >0 = privata
     recipientId: 0,          // 0 = globale, >0 = destinatario
     recipientName: '',       // Nome destinatario
     isGlobalChat: true,      // Flag chat corrente
@@ -277,36 +207,32 @@ const ZPCHAT = {
 };
 ```
 
-#### 4.2 Nuovo metodo: Avvia chat privata
+#### 4.2 Nuovo metodo: Avvia chat privata (diretto, senza fetch)
 ```javascript
 startPrivateChat(recipientId, recipientName) {
-    // Crea o ottieni conversazione
-    fetch(this.urlCreateConversation.replace('{recipient_id}', recipientId), {
-        credentials: 'same-origin',
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            this.conversationId = data.conversation_id;
-            this.recipientId = recipientId;
-            this.recipientName = recipientName;
-            this.isGlobalChat = false;
-            
-            // Reset cache
-            this.messageCache.clear();
-            this.lastId = 0;
-            this.messages.innerHTML = '';
-            
-            // Aggiorna UI
-            this.updateChatHeader();
-            this.startPolling();
-            
-            // Apri chat se chiusa
-            if (!this.isOpen) {
-                this.toggleChat();
-            }
-        }
-    });
+    this.recipientId = recipientId;
+    this.recipientName = recipientName;
+    this.isGlobalChat = false;
+
+    // Reset cache
+    this.messageCache.clear();
+    this.lastId = 0;
+    this.messages.innerHTML = '';
+
+    // Aggiorna UI
+    this.updateChatHeader();
+
+    // Riavvia polling con nuovo filtro
+    if (this.pollTimer) {
+        clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+    }
+    this.startPolling();
+
+    // Apri chat se chiusa
+    if (!this.isOpen) {
+        this.toggleChat();
+    }
 },
 ```
 
@@ -322,9 +248,8 @@ async sendMessage() {
     try {
         const formData = new FormData();
         formData.append('message', message);
-        
+
         if (!this.isGlobalChat) {
-            formData.append('conversation_id', this.conversationId);
             formData.append('recipient_id', this.recipientId);
         }
 
@@ -335,7 +260,7 @@ async sendMessage() {
         });
 
         const data = await response.json();
-        
+
         if (!data.success) {
             console.error('ZPChat: Send failed', data.error);
         }
@@ -356,12 +281,11 @@ startPolling() {
         let delay = this.pollBaseInterval;
         try {
             let url = `${this.urlMessages}?last_id=${this.lastId}`;
-            
+
             if (!this.isGlobalChat) {
-                url += `&conversation_id=${this.conversationId}`;
                 url += `&recipient_id=${this.recipientId}`;
             }
-            
+
             const response = await fetch(url, { credentials: 'same-origin' });
             // ... resto del codice ...
         }
@@ -374,16 +298,19 @@ startPolling() {
 #### 4.5 Nuovo metodo: Aggiorna header chat
 ```javascript
 updateChatHeader() {
-    const header = this.container?.querySelector('.zpchat-header');
-    if (header) {
-        const title = header.querySelector('.zpchat-title');
-        if (title) {
-            if (this.isGlobalChat) {
-                title.textContent = 'Chat Globale';
-            } else {
-                title.textContent = `Chat con ${this.recipientName}`;
-            }
+    const title = this.container?.querySelector('.zpchat-title');
+    const globalSwitch = document.getElementById('zpchat-global-switch');
+
+    if (title) {
+        if (this.isGlobalChat) {
+            title.textContent = 'Chat Globale';
+        } else {
+            title.textContent = `Chat con ${this.recipientName}`;
         }
+    }
+
+    if (globalSwitch) {
+        globalSwitch.style.display = this.isGlobalChat ? 'none' : 'flex';
     }
 },
 ```
@@ -392,30 +319,45 @@ updateChatHeader() {
 ```javascript
 switchToGlobalChat() {
     this.isGlobalChat = true;
-    this.conversationId = 0;
     this.recipientId = 0;
     this.recipientName = '';
-    
+
     this.messageCache.clear();
     this.lastId = 0;
     this.messages.innerHTML = '';
-    
+
     this.updateChatHeader();
+
+    if (this.pollTimer) {
+        clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+    }
     this.startPolling();
 },
 ```
 
 #### 4.7 Event listener per link avatar
 ```javascript
-// In init() o bindEvents()
-document.addEventListener('click', (e) => {
-    const link = e.target.closest('.zpchat-direct-link');
-    if (link) {
-        e.preventDefault();
-        const recipientId = parseInt(link.dataset.recipient, 10);
-        const recipientName = link.dataset.recipientName || 'Utente';
-        this.startPrivateChat(recipientId, recipientName);
-    }
+// In init()
+bindDirectChatLinks() {
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('.zpchat-direct-link');
+        if (link) {
+            e.preventDefault();
+            const recipientId = parseInt(link.dataset.recipient, 10);
+            const recipientName = link.dataset.recipientName || 'Utente';
+            this.startPrivateChat(recipientId, recipientName);
+        }
+    });
+},
+```
+
+#### 4.8 Event listener per pulsante switch globale
+```javascript
+// In bindEvents()
+document.getElementById('zpchat-global-switch')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    this.switchToGlobalChat();
 });
 ```
 
@@ -516,20 +458,66 @@ function display_options()
 
 ## Piano di Implementazione
 
-### Fase 1 - MVP (Chat Privata + Globale)
+### Fase 1 - MVP (Chat Privata + Globale) ✅ COMPLETATO
 1. ✅ Analisi fattibilità
-2. ⏳ Migration v1_1_0 con `recipient_id`
-3. ⏳ Modifiche controller per supportare `recipient_id`
-4. ⏳ Event listener per link avatar
-5. ⏳ Modifiche JS per gestire conversazione corrente
-6. ⏳ ACP opzioni configurazione
-7. ⏳ Test completi
+2. ✅ Migration v1_1_0 con `recipient_id`
+3. ✅ Modifiche controller per supportare `recipient_id`
+4. ✅ Event listener per link avatar
+5. ✅ Modifiche JS per gestire conversazione corrente
+6. ✅ ACP opzioni configurazione
+7. ⏳ Test completi (da eseguire dopo migration)
 
-### Fase 2 - Gestione Conversazioni Multiple (opzionale)
-1. Tabella `zpchat_conversations`
+**Approccio implementato:**
+- Solo campo `recipient_id` nella tabella messaggi (senza tabella `zpchat_conversations`)
+- Frontend gestisce direttamente switch tra chat globale e privata
+- Nessun endpoint `create_conversation` (gestito lato client)
+- Filtro conversazione SQL: `(user_id = A AND recipient_id = B) OR (user_id = B AND recipient_id = A)`
+
+### Fase 2 - Gestione Conversazioni Multiple (opzionale, da valutare)
+1. Tabella `zpchat_conversations` per metadati conversazioni
 2. UI sidebar con lista conversazioni
 3. Notifiche per conversazioni multiple
-4. Cronologia conversazioni
+4. Sistema stato utente (online/offline/occupato)
+5. Cronologia conversazioni
+
+### Fase 3 - Group Chat (3+ partecipanti, da valutare)
+1. Tabella pivot `zpchat_conversation_participants`
+2. UI per creare e gestire group chat
+3. Sistema notifiche per group chat
+4. Metadati conversazioni (nome, avatar, ultimo messaggio)
+
+---
+
+## Riepilogo Fase 1 MVP
+
+**Versione:** 1.1.0
+**Branch:** Inizio-P2Play
+**Commit:** cf686d2
+
+**File modificati:**
+- `migrations/v1_1_0.php` - Nuova migration con recipient_id
+- `controller/main_controller.php` - Filtro conversazione e verifica permessi
+- `event/main_listener.php` - Link chat nell'avatar
+- `styles/all/template/zpchat.js` - Gestione stato conversazione
+- `styles/all/template/zpchat_body.html` - Titolo dinamico e pulsante switch
+- `acp/main_module.php` - Opzioni ACP per chat privata/globale
+- `language/it/info_acp_zpchat.php` - Stringhe di lingua
+- `styles/all/theme/zpchat.css` - Styling link e switch
+- `styles/all/template/event/overall_footer_after.html` - Bump versione v9
+
+**Funzionalità implementate:**
+- Chat privata 1-to-1 tramite icona nell'avatar
+- Switch tra chat globale e privata
+- Header dinamico con nome conversazione
+- ACP opzioni per abilitare/disabilitare chat globale e privata
+- CSS styling per nuovi elementi UI
+
+**Passaggi successivi per test:**
+1. Eseguire migration v1_1_0 dal pannello ACP
+2. Abilitare "Permetti chat private" e "Permetti chat globale" nel pannello ACP
+3. Testare link chat negli avatar
+4. Testare switch tra chat globale e privata
+5. Testare invio messaggi in chat privata
 
 ---
 
