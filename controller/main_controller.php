@@ -186,8 +186,6 @@ class main_controller
         $message = trim(strip_tags($message));
         $recipient_id = $this->request->variable('recipient_id', 0);
 
-        error_log('ZPChat Send: user_id=' . $this->user->data['user_id'] . ', recipient_id=' . $recipient_id . ', message=' . $message);
-
         if (empty($message)) {
             return new JsonResponse(['success' => false, 'error' => 'Empty message'], 400);
         }
@@ -216,7 +214,6 @@ class main_controller
             $sql = 'INSERT INTO ' . $this->table_prefix . 'zpchat_messages ' . $this->db->sql_build_array('INSERT', $sql_ary);
             $this->db->sql_query($sql);
 
-            error_log('ZPChat Send: message inserted with recipient_id=' . $recipient_id);
             return new JsonResponse(['success' => true]);
         } catch (\Exception $e) {
             error_log('ZPChat Send Error: ' . $e->getMessage());

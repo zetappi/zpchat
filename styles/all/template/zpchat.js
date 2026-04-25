@@ -227,9 +227,6 @@
                 formData.append('message', message);
                 if (!this.isGlobalChat) {
                     formData.append('recipient_id', this.recipientId);
-                    console.log('ZPChat: Sending private message to recipient_id=' + this.recipientId);
-                } else {
-                    console.log('ZPChat: Sending global message');
                 }
 
                 const response = await fetch(url, {
@@ -500,7 +497,6 @@
         },
 
         startPrivateChat(recipientId, recipientName) {
-            console.log('ZPChat: startPrivateChat called with recipientId=' + recipientId + ', recipientName=' + recipientName);
             this.recipientId = recipientId;
             this.recipientName = recipientName;
             this.isGlobalChat = false;
@@ -543,8 +539,6 @@
         updateChatHeader() {
             const title = this.container?.querySelector('.zpchat-title');
             const globalSwitch = document.getElementById('zpchat-global-switch');
-
-            console.log('ZPChat updateChatHeader: isGlobalChat=' + this.isGlobalChat + ', recipientName=' + this.recipientName);
 
             if (title) {
                 if (this.isGlobalChat) {
