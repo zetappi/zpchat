@@ -465,7 +465,7 @@ function display_options()
 4. ✅ Event listener per link avatar
 5. ✅ Modifiche JS per gestire conversazione corrente
 6. ✅ ACP opzioni configurazione
-7. ⏳ Test completi (da eseguire dopo migration)
+7. ✅ Test completi (chat globale funzionante)
 
 **Approccio implementato:**
 - Solo campo `recipient_id` nella tabella messaggi (senza tabella `zpchat_conversations`)
