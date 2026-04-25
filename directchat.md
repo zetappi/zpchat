@@ -462,16 +462,18 @@ function display_options()
 1. ✅ Analisi fattibilità
 2. ✅ Migration v1_1_0 con `recipient_id`
 3. ✅ Modifiche controller per supportare `recipient_id`
-4. ✅ Event listener per link avatar
+4. ✅ JavaScript-only approach per link avatar (eventi phpBB non funzionanti)
 5. ✅ Modifiche JS per gestire conversazione corrente
 6. ✅ ACP opzioni configurazione
-7. ✅ Test completi (chat globale funzionante)
+7. ✅ Test completi (chat privata funzionante)
 
 **Approccio implementato:**
 - Solo campo `recipient_id` nella tabella messaggi (senza tabella `zpchat_conversations`)
 - Frontend gestisce direttamente switch tra chat globale e privata
 - Nessun endpoint `create_conversation` (gestito lato client)
 - Filtro conversazione SQL: `(user_id = A AND recipient_id = B) OR (user_id = B AND recipient_id = A)`
+- Link chat nell'avatar inseriti via JavaScript (eventi phpBB non funzionanti)
+- Metodo `insertChatLinks()` cerca avatar nel DOM e inserisce link chat
 
 ### Fase 2 - Gestione Conversazioni Multiple (opzionale, da valutare)
 1. Tabella `zpchat_conversations` per metadati conversazioni
