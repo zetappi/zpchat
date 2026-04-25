@@ -32,7 +32,6 @@ class main_listener implements EventSubscriberInterface
         $this->template    = $template;
         $this->ext_manager = $ext_manager;
         $this->helper      = $helper;
-        error_log('ZPChat: main_listener constructor called');
     }
 
     public static function getSubscribedEvents()
@@ -40,8 +39,32 @@ class main_listener implements EventSubscriberInterface
         return [
             'core.user_setup'              => 'on_user_setup',
             'core.page_footer'             => 'on_page_footer',
-            'core.viewtopic_modify_post_row' => 'on_viewtopic_modify_post_row',
+            'core.viewtopic_post_row_after' => 'on_viewtopic_post_row_after',
         ];
+    }
+
+    public function on_viewtopic_post_row_after($event)
+    {
+        if (empty($this->config['zpchat_enabled']) || empty($this->config['zpchat_allow_private'])) {
+            return;
+        }
+
+        if ($this->user->data['user_id'] == ANONYMOUS) {
+            return;
+        }
+
+        $user_id = $event['user_poster_id'];
+        $username = $event['post_row']['POST_AUTHOR'];
+
+        if ($user_id == 0 || $user_id == $this->user->data['user_id']) {
+            return;
+        }
+
+        // Aggiunge data attributes al post per inserimento link chat via JavaScript
+        $event['post_row'] = array_merge($event['post_row'], [
+            'ZPCHAT_USER_ID' => $user_id,
+            'ZPCHAT_USERNAME' => $username,
+        ]);
     }
 
     public function on_user_setup($event)
@@ -90,51 +113,5 @@ class main_listener implements EventSubscriberInterface
     public function on_page_footer($event)
     {
         $this->assign_chat_vars();
-    }
-
-    public function on_viewtopic_modify_post_row($event)
-    {
-        error_log('ZPChat: on_viewtopic_modify_post_row triggered');
-
-        if (empty($this->config['zpchat_enabled'])) {
-            error_log('ZPChat: zpchat_enabled is empty');
-            return;
-        }
-        if (empty($this->config['zpchat_allow_private'])) {
-            error_log('ZPChat: zpchat_allow_private is empty');
-            return;
-        }
-
-        if ($this->user->data['user_id'] == ANONYMOUS) {
-            error_log('ZPChat: user is anonymous');
-            return;
-        }
-
-        $post_row = $event['post_row'];
-        $user_id = isset($event['user_poster_data']['user_id']) ? (int) $event['user_poster_data']['user_id'] : 0;
-        $username = isset($event['user_poster_data']['username']) ? $event['user_poster_data']['username'] : '';
-
-        error_log('ZPChat: user_id=' . $user_id . ', username=' . $username);
-
-        if ($user_id == 0) {
-            error_log('ZPChat: user_id is 0, returning');
-            return;
-        }
-
-        // Non mostrare link per se stessi
-        if ($user_id == $this->user->data['user_id']) {
-            error_log('ZPChat: skipping own user');
-            return;
-        }
-
-        $chat_url = $this->helper->route('marcozp_zpchat_send');
-
-        // Aggiungi link chat vicino all'avatar
-        $post_row['POSTER_AVATAR'] .= '<a href="#" class="zpchat-direct-link" data-recipient="' . $user_id . '" data-recipient-name="' . htmlspecialchars($username) . '" title="Chat privata con ' . htmlspecialchars($username) . '">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="#00aaee"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
-        </a>';
-
-        error_log('ZPChat: link added to avatar');
-        $event['post_row'] = $post_row;
     }
 }
